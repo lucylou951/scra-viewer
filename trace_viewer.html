@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Trace Viewer</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --card: #fff; --border: #dee2e6;
+    --stage-a: #e8f5e9; --stage-a-border: #66bb6a;
+    --stage-b: #e3f2fd; --stage-b-border: #42a5f5;
+    --stage-c: #fff3e0; --stage-c-border: #ffa726;
+    --stage-d: #f3e5f5; --stage-d-border: #ab47bc;
+    --stage-e: #fce4ec; --stage-e-border: #ef5350;
+    --eval-correct: #c8e6c9; --eval-wrong: #ffcdd2; --eval-na: #e0e0e0;
+    --prompt-bg: #f5f5f5; --output-bg: #fffde7;
+    --text: #212529; --muted: #6c757d; --mono: 'Menlo', 'Consolas', 'Monaco', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.4; }
+
+  /* Top bar */
+  .topbar { position: sticky; top: 0; z-index: 100; background: #fff; border-bottom: 1px solid var(--border);
+            padding: 6px 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .topbar h1 { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .topbar .file-area { display: flex; align-items: center; gap: 6px; }
+  .topbar label { font-size: 12px; color: var(--muted); }
+  .topbar input[type="file"] { font-size: 12px; }
+  .topbar .nav { display: flex; align-items: center; gap: 5px; margin-left: auto; }
+  .topbar select { font-size: 12px; padding: 2px 4px; max-width: 320px; }
+  .topbar button { font-size: 12px; padding: 3px 8px; cursor: pointer; border: 1px solid var(--border);
+                   background: #fff; border-radius: 3px; }
+  .topbar button:hover { background: #f0f0f0; }
+  .topbar .counter { font-size: 12px; color: var(--muted); min-width: 50px; text-align: center; }
+
+  /* Dataset summary bar */
+  .summary { padding: 5px 12px; background: #fff; border-bottom: 1px solid var(--border);
+             display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .summary .stat { display: flex; gap: 3px; }
+  .summary .stat b { color: var(--text); }
+
+  /* Record header */
+  .record-header { padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--border); }
+  .record-header .var-id { font-size: 16px; font-weight: 700; font-family: var(--mono); }
+  .record-header .meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .record-header .eval-badge { display: inline-block; padding: 1px 7px; border-radius: 10px;
+                                font-size: 11px; font-weight: 600; margin-left: 6px; }
+  .eval-correct { background: var(--eval-correct); color: #2e7d32; }
+  .eval-wrong { background: var(--eval-wrong); color: #c62828; }
+  .eval-na { background: var(--eval-na); color: #616161; }
+
+  /* Record summary */
+  .record-summary { margin: 8px 12px; padding: 8px 10px; border: 1px solid var(--border);
+                    border-radius: 6px; background: #fff; font-size: 12px; }
+  .record-summary .input-row { margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #f0f0f0; }
+  .record-summary .input-row .meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; font-family: var(--mono); font-size: 11px; }
+  .record-summary .input-row .meta-key { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .record-summary .input-row .meta-val { word-break: break-word; }
+  .record-summary .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  .record-summary .col { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; align-content: start; }
+  .record-summary .col-title { grid-column: 1 / -1; font-weight: 600; font-size: 11px; color: var(--muted);
+                                text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+  .record-summary .comp-label { color: var(--muted); font-weight: 600; white-space: nowrap; font-size: 11px; }
+  .record-summary .comp-val { font-family: var(--mono); font-size: 11px; word-break: break-word; }
+  .record-summary .comp-val .id { font-weight: 600; }
+  .record-summary .comp-val .lbl { color: var(--muted); margin-left: 3px; }
+  .record-summary .concept-path { font-size: 11px; font-family: var(--mono); }
+  .record-summary .concept-path .arrow { color: var(--muted); margin: 0 2px; }
+
+  /* Stage cards */
+  .stages { padding: 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .stage { border: 1px solid var(--border); border-radius: 5px; overflow: hidden; border-left: 3px solid; }
+  .stage-a { border-left-color: var(--stage-a-border); }
+  .stage-b { border-left-color: var(--stage-b-border); }
+  .stage-c { border-left-color: var(--stage-c-border); }
+  .stage-d { border-left-color: var(--stage-d-border); }
+  .stage-e { border-left-color: var(--stage-e-border); }
+
+  .stage-head { padding: 4px 10px; font-weight: 600; font-size: 12px; display: flex;
+                justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+  .stage-a .stage-head { background: var(--stage-a); }
+  .stage-b .stage-head { background: var(--stage-b); }
+  .stage-c .stage-head { background: var(--stage-c); }
+  .stage-d .stage-head { background: var(--stage-d); }
+  .stage-e .stage-head { background: var(--stage-e); }
+
+  .stage-head .module-name { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .stage-head .badges { display: flex; gap: 4px; font-weight: 400; font-size: 11px; color: var(--muted); }
+  .stage-head .badges span { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 8px; }
+
+  .stage-body { padding: 6px 10px; background: var(--card); }
+  .stage-body.collapsed { display: none; }
+
+  /* Key-value rows */
+  .kv { display: flex; gap: 6px; padding: 2px 0; border-bottom: 1px solid #f5f5f5; font-size: 12px; }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { color: var(--muted); min-width: 120px; flex-shrink: 0; }
+  .kv .v { word-break: break-word; }
+  .kv .v.mono { font-family: var(--mono); font-size: 11px; }
+
+  /* Candidates list */
+  .candidates { display: flex; flex-wrap: wrap; gap: 3px; }
+  .cand { background: #e3f2fd; padding: 1px 6px; border-radius: 3px; font-size: 11px; font-family: var(--mono); }
+  .cand.matched { background: #bbdefb; font-weight: 600; border: 1px solid var(--stage-b-border); }
+
+  /* Validation flags */
+  .flag { background: #f3e5f5; padding: 1px 6px; border-radius: 3px; font-size: 11px; margin-right: 3px; }
+  .flag.pass { background: var(--eval-correct); }
+
+  /* Stage warnings */
+  .warnings { margin-top: 4px; }
+  .warning-item { background: #fff3e0; border-left: 3px solid #ff9800; padding: 3px 6px; margin-bottom: 3px;
+                  font-size: 11px; font-family: var(--mono); border-radius: 0 3px 3px 0; word-break: break-word; }
+  .warning-badge { background: #fff3e0; color: #e65100; font-weight: 600; }
+
+  /* LLM chat bubbles */
+  .llm-calls { margin-top: 6px; }
+  .llm-call { border: 1px solid #e0e0e0; border-radius: 5px; margin-bottom: 4px; overflow: hidden; }
+  .llm-call-header { padding: 3px 8px; background: #fafafa; font-size: 11px; color: var(--muted);
+                     cursor: pointer; user-select: none; display: flex; justify-content: space-between; }
+  .llm-call-body { display: none; }
+  .llm-call-body.open { display: block; }
+
+  .bubble { padding: 6px 10px; font-size: 12px; }
+  .bubble-prompt { background: var(--prompt-bg); border-bottom: 1px solid #e0e0e0; }
+  .bubble-output { background: var(--output-bg); }
+  .bubble-label { font-size: 10px; font-weight: 600; color: var(--muted); margin-bottom: 2px; text-transform: uppercase; }
+  .bubble pre { white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 11px;
+                max-height: 400px; overflow-y: auto; line-height: 1.4; }
+
+  /* No data */
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty p { margin-top: 8px; }
+
+  /* Keyboard hint */
+  .kbd { display: inline-block; background: #e9ecef; border: 1px solid #ced4da; border-radius: 3px;
+         padding: 0 4px; font-size: 10px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Trace Viewer</h1>
+  <div class="file-area">
+    <label>Load folder:</label>
+    <input type="file" id="folderInput" webkitdirectory style="max-width:180px;">
+    <span style="font-size:10px;color:var(--muted);margin:0 4px;">or file:</span>
+    <input type="file" id="fileInput" accept=".jsonl,.json,.txt">
+  </div>
+  <div class="nav" id="navArea" style="display:none;">
+    <button id="prevBtn" title="Previous (Left arrow)">&larr;</button>
+    <span class="counter" id="counter"></span>
+    <button id="nextBtn" title="Next (Right arrow)">&rarr;</button>
+    <select id="entrySelect"></select>
+    <span style="font-size:10px;color:var(--muted)">
+      <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> navigate
+    </span>
+  </div>
+</div>
+
+<div id="filterBanner" style="display:none;padding:4px 12px;background:#fff3e0;border-bottom:1px solid #ffe0b2;font-size:12px;color:#e65100;">
+  Filtered to <b id="filterCount"></b> records from Parallel Set viewer.
+  <a href="#" id="clearFilter" style="margin-left:8px;color:#1565c0;">Show all</a>
+</div>
+<div class="summary" id="summaryBar" style="display:none;"></div>
+<div id="recordView"></div>
+
+<div class="empty" id="placeholder">
+  <h2>No trace loaded</h2>
+  <p>Load a <code>record_traces.jsonl</code> file from an experiment run.</p>
+  <p style="margin-top:4px;font-size:12px;">
+    Generated by <code>--save-intermediate-outputs</code> flag in <code>run_baseline.py</code>
+  </p>
+</div>
+
+<script>
+let records = [];
+let allRecords = [];  // unfiltered copy
+let currentIdx = 0;
+
+const fileInput = document.getElementById('fileInput');
+const navArea = document.getElementById('navArea');
+const counter = document.getElementById('counter');
+const entrySelect = document.getElementById('entrySelect');
+const recordView = document.getElementById('recordView');
+const placeholder = document.getElementById('placeholder');
+const summaryBar = document.getElementById('summaryBar');
+const filterBanner = document.getElementById('filterBanner');
+
+// Parse ?filter=ID1,ID2,... from URL
+function getFilterIds() {
+  const params = new URLSearchParams(window.location.search);
+  const f = params.get('filter');
+  if (!f) return null;
+  return new Set(f.split(',').map(s => s.trim()).filter(Boolean));
+}
+
+function applyFilter(filterIds) {
+  if (filterIds && filterIds.size > 0) {
+    records = allRecords.filter(r => filterIds.has(r.var_id));
+    filterBanner.style.display = 'block';
+    document.getElementById('filterCount').textContent = `${records.length}/${allRecords.length}`;
+  } else {
+    records = allRecords.slice();
+    filterBanner.style.display = 'none';
+  }
+  buildNav();
+  buildSummary();
+  currentIdx = 0;
+  if (records.length > 0) render();
+}
+
+document.getElementById('clearFilter').addEventListener('click', (e) => {
+  e.preventDefault();
+  // Remove filter param from URL without reload
+  const url = new URL(window.location);
+  url.searchParams.delete('filter');
+  window.history.replaceState({}, '', url);
+  applyFilter(null);
+});
+
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  allRecords = text.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+  if (allRecords.length === 0) return;
+  applyFilter(getFilterIds());
+});
+
+// Folder input — auto-find record_traces.jsonl
+document.getElementById('folderInput').addEventListener('change', async (e) => {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+  let traceFile = null;
+  for (const f of files) {
+    if (f.name === 'record_traces.jsonl') { traceFile = f; break; }
+  }
+  if (!traceFile) { alert('record_traces.jsonl not found in selected folder.'); return; }
+  const text = await traceFile.text();
+  allRecords = text.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+  if (allRecords.length === 0) return;
+  applyFilter(getFilterIds());
+});
+
+// Auto-load via postMessage when opened from Parallel Set viewer
+(function autoloadFromOpener() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('autoload')) return;
+
+  window.addEventListener('message', function onData(evt) {
+    if (!evt.data || evt.data.type !== '_traceViewerData') return;
+    window.removeEventListener('message', onData);
+
+    const traceText = evt.data.traceText;
+    const filterStr = evt.data.filterIds;
+    if (!traceText) return;
+
+    allRecords = traceText.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+    if (allRecords.length === 0) return;
+
+    const filterIds = filterStr
+      ? new Set(filterStr.split(',').map(s => s.trim()).filter(Boolean))
+      : null;
+    applyFilter(filterIds);
+  });
+
+  // Signal to the opener that we're ready to receive data
+  if (window.opener) {
+    window.opener.postMessage('_traceViewerReady', '*');
+  }
+})();
+
+function buildNav() {
+  placeholder.style.display = 'none';
+  navArea.style.display = 'flex';
+  summaryBar.style.display = 'flex';
+  entrySelect.innerHTML = '';
+  records.forEach((r, i) => {
+    const opt = document.createElement('option');
+    const evalMark = r.eval?.correct === true ? ' +' : r.eval?.correct === false ? ' x' : '';
+    opt.value = i;
+    opt.textContent = `${i + 1}. ${r.var_id} — ${truncate(r.original_label, 50)}${evalMark}`;
+    entrySelect.appendChild(opt);
+  });
+}
+
+function buildSummary() {
+  const total = records.length;
+  const correct = records.filter(r => r.eval?.correct === true).length;
+  const wrong = records.filter(r => r.eval?.correct === false).length;
+  const na = total - correct - wrong;
+  const noMatch = records.filter(r => r.stage_c?.decision_type === 'no_match').length;
+  const flagged = records.filter(r => r.stage_d?.validation_flags?.length > 0).length;
+  summaryBar.innerHTML = `
+    <div class="stat">Records: <b>${total}</b></div>
+    <div class="stat">Correct: <b style="color:#2e7d32">${correct}</b></div>
+    <div class="stat">Wrong: <b style="color:#c62828">${wrong}</b></div>
+    <div class="stat">Unlabeled: <b>${na}</b></div>
+    <div class="stat">No-match: <b>${noMatch}</b></div>
+    <div class="stat">Flagged: <b>${flagged}</b></div>
+    ${correct + wrong > 0 ? `<div class="stat">Accuracy: <b>${((correct / (correct + wrong)) * 100).toFixed(1)}%</b></div>` : ''}
+  `;
+}
+
+function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '...' : (s || ''); }
+
+function render() {
+  const r = records[currentIdx];
+  counter.textContent = `${currentIdx + 1} / ${records.length}`;
+  entrySelect.value = currentIdx;
+
+  const evalClass = r.eval?.correct === true ? 'eval-correct' :
+                    r.eval?.correct === false ? 'eval-wrong' : 'eval-na';
+  const evalLabel = r.eval?.correct === true ? 'Correct' :
+                    r.eval?.correct === false ? 'Wrong' : 'N/A';
+
+  const p = r.pipeline || {};
+  const ev = r.eval || {};
+  const c = r.stage_c || {};
+  const b = r.stage_b || {};
+
+  const fmtRvar = (id, label) => {
+    if (!id) return '<span style="color:var(--muted)">--</span>';
+    let s = `<span class="id">${esc(id)}</span>`;
+    if (label) s += `<span class="lbl">(${esc(label)})</span>`;
+    return s;
+  };
+
+  const fmtPath = (path) => {
+    if (!path || !path.length) return '<span style="color:var(--muted)">--</span>';
+    return '<span class="concept-path">' + path.map(n => esc(n)).join('<span class="arrow">&gt;</span>') + '</span>';
+  };
+
+  const predictedLabel = c.matched_rvar_id
+    ? ((b.candidates || []).find(x => x.rvar_id === c.matched_rvar_id) || {}).label || ''
+    : '';
+
+  let html = `
+    <div class="record-header">
+      <span class="var-id">${esc(r.var_id)}</span>
+      <span class="eval-badge ${evalClass}">${evalLabel}</span>
+      <div class="meta">
+        Study: ${esc(r.study_id)} &middot; Form: ${esc(r.form_name)}
+        ${p.prompting_technique ? ` &middot; technique=<code>${esc(p.prompting_technique)}</code>` : ''}
+        ${p.model ? ` &middot; model=<code>${esc(p.model)}</code>` : ''}
+      </div>
+    </div>
+  `;
+
+  // --- Summary: 2-column layout ---
+  html += `<div class="record-summary">
+    <div class="input-row">
+      ${(() => {
+        const meta = r.var_metadata || {};
+        const order = [
+          ['form_name', 'FormName'],
+          ['domain_id', 'Domain'],
+          ['subdomain_id', 'Subdomain'],
+          ['data_element', 'Element'],
+          ['var_label', 'VarLabel'],
+        ];
+        const rows = order
+          .filter(([k]) => meta[k])
+          .map(([k, label]) => `<span class="meta-key">${label}:</span><span class="meta-val">${esc(meta[k])}</span>`)
+          .join('');
+        const noMeta = rows === '' ? `<span style="grid-column:1/-1;color:var(--muted);font-size:10px">(metadata not in trace — re-run to populate)</span>` : '';
+        return `<div class="meta-grid">
+          <span class="meta-key">Description:</span><span class="meta-val">${esc(r.original_label)}</span>
+          ${rows}${noMeta}
+        </div>`;
+      })()}
+    </div>
+    <div class="two-col">
+      <div class="col">
+        <span class="col-title">Variable Mapping</span>
+        <span class="comp-label">Predicted:</span>
+        <span class="comp-val">${c.decision_type === 'match'
+          ? fmtRvar(c.matched_rvar_id, predictedLabel)
+          : '<span style="color:#c62828;font-weight:600">no_match</span>'}</span>
+        <span class="comp-label">Ground truth:</span>
+        <span class="comp-val">${ev.ground_truth_id
+          ? fmtRvar(ev.ground_truth_id, ev.ground_truth_label)
+          : '<span style="color:var(--muted)">unlabeled</span>'}</span>
+        ${ev.correct != null ? `
+          <span class="comp-label">Result:</span>
+          <span class="comp-val"><b style="color:${ev.correct ? '#2e7d32' : '#c62828'}">${ev.correct ? 'Correct' : 'Wrong'}</b>${ev.tree_distance != null ? ` <span style="color:var(--muted)">(dist: ${ev.tree_distance})</span>` : ''}</span>
+        ` : ''}
+      </div>
+      <div class="col">
+        <span class="col-title">Concept Path</span>
+        <span class="comp-label">Predicted:</span>
+        <span class="comp-val">${fmtPath(b.selected_concept_path)}</span>
+        <span class="comp-label">Ground truth:</span>
+        <span class="comp-val">${fmtPath(ev.ground_truth_concept_path)}</span>
+        ${ev.concept_path_correct != null ? `
+          <span class="comp-label">Result:</span>
+          <span class="comp-val"><b style="color:${ev.concept_path_correct ? '#2e7d32' : '#c62828'}">${ev.concept_path_correct ? 'Correct' : 'Wrong'}</b></span>
+        ` : ''}
+      </div>
+    </div>
+  </div>`;
+
+  html += '<div class="stages">';
+
+  const sw = r.stage_warnings || {};
+
+  // Stage A
+  const a = r.stage_a || {};
+  html += stageCard('A', 'Enrich', 'stage-a', p.stage_a_module, [
+    kv('Original label', r.original_label),
+    kv('Enriched desc', a.enriched_desc, true),
+  ], a.llm_calls, r.timings?.stage_a, r.token_counts?.stage_a, sw.stage_a);
+
+  // Stage B
+  const candHtml = (b.candidates || []).map(cd => {
+    const lbl = cd.label ? ` -- ${esc(cd.label)}` : '';
+    return `<span class="cand${cd.rvar_id === c.matched_rvar_id ? ' matched' : ''}">${esc(cd.rvar_id)}${lbl}</span>`;
+  }).join('') || '<span style="color:var(--muted)">none (expansion case)</span>';
+  const bPath = b.selected_concept_path || [];
+  const bLastLabel = bPath.length ? bPath[bPath.length - 1] : null;
+  const bNodeHtml = b.selected_ontology_node_id
+    ? `<code>${esc(b.selected_ontology_node_id)}</code>${bLastLabel ? ` <span style="color:var(--muted)">(${esc(bLastLabel)})</span>` : ''}`
+    : '--';
+  html += stageCard('B', 'Candidates', 'stage-b', p.stage_b_module, [
+    kv('Selected node', bNodeHtml),
+    kv('Candidates', `<div class="candidates">${candHtml}</div>`),
+  ], b.llm_calls, r.timings?.stage_b, r.token_counts?.stage_b, sw.stage_b);
+
+  // Stage C
+  const decColor = c.decision_type === 'match' ? '#2e7d32' : '#c62828';
+  const nCands = (b.candidates || []).length;
+  const cBehavior = nCands === 0
+    ? '<span style="color:#e65100;font-weight:600">0 candidates: no LLM call (expansion case)</span>'
+    : nCands === 1
+    ? '<span style="color:#1565c0">1 candidate: LLM validates</span>'
+    : `<span style="color:#1565c0">${nCands} candidates: LLM picks best or rejects</span>`;
+  html += stageCard('C', 'Decide', 'stage-c', p.stage_c_module, [
+    kv('Behavior', cBehavior),
+    kv('Decision', `<span style="color:${decColor};font-weight:600">${esc(c.decision_type || 'N/A')}</span>`),
+    kv('Matched R_var', c.matched_rvar_id
+      ? `<code>${esc(c.matched_rvar_id)}</code>${predictedLabel ? ` <span style="color:var(--muted)">(${esc(predictedLabel)})</span>` : ''}`
+      : '--'),
+    kv('Reasoning', c.decision_reasoning, true),
+  ], c.llm_calls, r.timings?.stage_c, r.token_counts?.stage_c, sw.stage_c);
+
+  // Stage D
+  const d = r.stage_d || {};
+  const flags = d.validation_flags || [];
+  const flagHtml = flags.length === 0
+    ? '<span class="flag pass">All checks passed</span>'
+    : flags.map(f => `<span class="flag">${esc(f)}</span>`).join('');
+  html += stageCard('D', 'Integrity', 'stage-d', null, [
+    kv('Flags', flagHtml),
+  ], [], r.timings?.stage_d, null, sw.stage_d);
+
+  // Stage E
+  const e_ = r.stage_e || {};
+  if (e_.routed_to_human || e_.expansion_proposed_at) {
+    const eRows = [
+      kv('Routed to human', e_.routed_to_human ? 'Yes' : 'No'),
+    ];
+    if (e_.expansion_proposed_at) {
+      eRows.push(kv('Expansion at',
+        `<span style="color:#e65100;font-weight:600">${esc(e_.expansion_proposed_at)}</span> ` +
+        '<span style="color:var(--muted);font-size:10px">(proposed location for new RegVar)</span>'));
+    }
+    html += stageCard('E', 'Resolution', 'stage-e', p.stage_e_module, eRows,
+      e_.llm_calls, r.timings?.stage_e, r.token_counts?.stage_e, sw.stage_e);
+  }
+
+  html += '</div>';
+  recordView.innerHTML = html;
+
+  // Wire up collapse toggles
+  recordView.querySelectorAll('.stage-head').forEach(h => {
+    h.addEventListener('click', () => {
+      h.nextElementSibling.classList.toggle('collapsed');
+    });
+  });
+  recordView.querySelectorAll('.llm-call-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.nextElementSibling.classList.toggle('open');
+    });
+  });
+}
+
+function stageCard(letter, name, cls, module, kvRows, llmCalls, timing, tokens, warnings) {
+  const badges = [];
+  if (timing != null) badges.push(`${timing.toFixed(2)}s`);
+  if (tokens != null) badges.push(`${tokens} tok`);
+  if (llmCalls?.length) badges.push(`${llmCalls.length} LLM call${llmCalls.length > 1 ? 's' : ''}`);
+  if (warnings?.length) badges.push(`<span class="warning-badge">${warnings.length} warn</span>`);
+
+  const moduleTag = module ? `<span class="module-name">${esc(module)}</span>` : '';
+
+  let body = kvRows.join('');
+
+  if (warnings?.length) {
+    body += '<div class="warnings">';
+    warnings.forEach(w => {
+      body += `<div class="warning-item">${esc(w)}</div>`;
+    });
+    body += '</div>';
+  }
+
+  if (llmCalls?.length) {
+    body += '<div class="llm-calls">';
+    llmCalls.forEach((call, i) => {
+      const tokInfo = [];
+      if (call.prompt_tokens) tokInfo.push(`p:${call.prompt_tokens}`);
+      if (call.completion_tokens) tokInfo.push(`c:${call.completion_tokens}`);
+      const tmpl = call.prompt_template ? ` [${call.prompt_template}]` : '';
+      const fallbackTag = call.fallback ? ' <span style="color:#c62828;font-weight:600">FALLBACK</span>' : '';
+      const errorTag = call.error ? ' <span style="color:#c62828;font-weight:600">ERROR</span>' : '';
+      body += `
+        <div class="llm-call">
+          <div class="llm-call-header">
+            <span>LLM Call ${i + 1}${tmpl}${tokInfo.length ? ' -- ' + tokInfo.join(', ') : ''}${fallbackTag}${errorTag}</span>
+            <span style="font-size:10px">expand</span>
+          </div>
+          <div class="llm-call-body">
+            ${call.prompt ? `<div class="bubble bubble-prompt"><div class="bubble-label">Prompt</div><pre>${esc(call.prompt)}</pre></div>` : ''}
+            ${call.error ? `<div class="bubble" style="background:#ffcdd2;border-bottom:1px solid #e0e0e0"><div class="bubble-label" style="color:#c62828">Error</div><pre>${esc(call.error)}</pre></div>` : ''}
+            <div class="bubble bubble-output"><div class="bubble-label">Output</div><pre>${esc(call.output || '')}</pre></div>
+          </div>
+        </div>`;
+    });
+    body += '</div>';
+  }
+
+  return `
+    <div class="stage ${cls}">
+      <div class="stage-head">
+        <span>Stage ${letter} -- ${name}${moduleTag}</span>
+        <div class="badges">${badges.map(b => `<span>${b}</span>`).join('')}</div>
+      </div>
+      <div class="stage-body">${body}</div>
+    </div>`;
+}
+
+function kv(key, val, mono) {
+  if (val == null) val = '--';
+  const rendered = typeof val === 'string' && !val.startsWith('<')
+    ? `<span class="${mono ? 'v mono' : 'v'}">${esc(val)}</span>`
+    : `<span class="v">${val}</span>`;
+  return `<div class="kv"><span class="k">${esc(key)}</span>${rendered}</div>`;
+}
+
+function esc(s) {
+  if (s == null) return '--';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Navigation
+document.getElementById('prevBtn').addEventListener('click', () => { go(-1); });
+document.getElementById('nextBtn').addEventListener('click', () => { go(1); });
+entrySelect.addEventListener('change', () => { currentIdx = +entrySelect.value; render(); });
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowLeft') go(-1);
+  if (e.key === 'ArrowRight') go(1);
+});
+function go(delta) {
+  if (records.length === 0) return;
+  currentIdx = Math.max(0, Math.min(records.length - 1, currentIdx + delta));
+  render();
+}
+</script>
+</body>
+</html>

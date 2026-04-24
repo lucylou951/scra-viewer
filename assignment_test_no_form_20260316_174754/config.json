@@ -1,0 +1,29 @@
+{
+  "experiment_id": "assignment_test_no_form_20260316_174754",
+  "stage_a": "stage_a_llm",
+  "stage_b": "stage_b_tree",
+  "stage_c": "stage_c_llm_judge",
+  "stage_d": [
+    "stage_d_all_checks"
+  ],
+  "stage_e": "stage_e_propose_stub",
+  "prompting_technique": "cot",
+  "hyperparams": {
+    "llm_backend": "azure_foundry",
+    "llm_model": "o3-mini",
+    "llm_api_key": "EMPTY",
+    "llm_base_url": "https://apim-aimaas-prod.azure-api.net/o3mini-tpham44-35376/openai/deployments/o3mini-tpham44-35376/chat/completions?api-version=2025-03-01-preview",
+    "llm_use_batch_api": false,
+    "llm_batch_size": 16,
+    "serialization_format": "indented_labels",
+    "tree_nav_depth": "full",
+    "candidate_k": 5,
+    "allow_stage_a_fallback": false,
+    "stage_a_max_tokens": 4096,
+    "stage_b_max_tokens": 6144,
+    "stage_c_max_tokens": 6144
+  },
+  "dump_stage_a": false,
+  "verbose": true,
+  "save_intermediate": true
+}
