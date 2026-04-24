@@ -244,6 +244,21 @@ document.getElementById('folderInput').addEventListener('change', async (e) => {
   applyFilter(getFilterIds());
 });
 
+// Auto-load default experiment from data/record_traces.jsonl on first paint.
+// Skipped when ?autoload=1 (cross-viewer postMessage handoff is in charge then).
+(async function autoloadDefault() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('autoload')) return;
+  try {
+    const resp = await fetch('data/record_traces.jsonl');
+    if (!resp.ok) return;
+    const text = await resp.text();
+    allRecords = text.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+    if (allRecords.length === 0) return;
+    applyFilter(getFilterIds());
+  } catch (_) { /* leave folder picker as fallback */ }
+})();
+
 // Auto-load via postMessage when opened from Parallel Set viewer
 (function autoloadFromOpener() {
   const params = new URLSearchParams(window.location.search);

@@ -1,0 +1,37 @@
+{
+  "exact_match_accuracy": {
+    "value": 0.6861313868613139,
+    "ci_lower": 0.6131386861313869,
+    "ci_upper": 0.7591240875912408
+  },
+  "candidate_recall_at_k": {
+    "value": 0.8321167883211679,
+    "ci_lower": 0.7664233576642335,
+    "ci_upper": 0.8978102189781022
+  },
+  "concept_path_accuracy": {
+    "value": 0.9635036496350365,
+    "ci_lower": 0.9343065693430657,
+    "ci_upper": 0.9927007299270073
+  },
+  "mean_tree_distance": {
+    "value": 0.45901639344262296,
+    "ci_lower": 0.3140495867768595,
+    "ci_upper": 0.5967741935483871
+  },
+  "weighted_accuracy": {
+    "value": 0.7542579075425788,
+    "ci_lower": 0.6909975669099755,
+    "ci_upper": 0.8199513381995132
+  },
+  "validation_pass_rate": {
+    "value": 1.0,
+    "ci_lower": 1.0,
+    "ci_upper": 1.0
+  },
+  "no_match_rate": {
+    "value": 0.10948905109489052,
+    "ci_lower": 0.06569343065693431,
+    "ci_upper": 0.1678832116788321
+  }
+}

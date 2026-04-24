@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Parallel Set — Error Type Analysis</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  :root {
+    --bg: #f8f9fa; --card: #fff; --border: #dee2e6;
+    --text: #212529; --muted: #6c757d;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.4; }
+
+  .topbar { position: sticky; top: 0; z-index: 100; background: #fff;
+            border-bottom: 1px solid var(--border); padding: 6px 12px;
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .topbar h1 { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .topbar label { font-size: 12px; color: var(--muted); }
+  .topbar input[type="file"] { font-size: 12px; }
+  .topbar .load-status { font-size: 10px; padding: 2px 6px; border-radius: 8px; }
+  .topbar .load-ok { background: #e8f5e9; color: #2e7d32; }
+  .topbar .load-miss { background: #fff3e0; color: #e65100; }
+
+  .summary { padding: 5px 12px; background: #fff; border-bottom: 1px solid var(--border);
+             display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .summary .stat { display: flex; gap: 3px; }
+  .summary .stat b { color: var(--text); }
+
+  .legend { padding: 6px 12px; background: #fff; border-bottom: 1px solid var(--border);
+            display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+
+  #chart { width: 100%; }
+
+  .empty { text-align: center; padding: 80px 20px; color: var(--muted); }
+  .empty h2 { font-size: 18px; margin-bottom: 8px; }
+  .empty p { font-size: 13px; }
+  .empty code { background: #e9ecef; padding: 1px 4px; border-radius: 3px; font-family: monospace; }
+
+  #detailPanel { display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+                 border-top: 2px solid var(--border); background: #fff;
+                 max-height: 38vh; overflow: hidden; box-shadow: 0 -2px 8px rgba(0,0,0,0.08); }
+  .detail-header { padding: 5px 12px; background: #f0f0f0; border-bottom: 1px solid var(--border);
+                   display: flex; align-items: center; justify-content: space-between; }
+  .detail-header h3 { font-size: 13px; font-weight: 600; }
+  .detail-header button { font-size: 11px; padding: 2px 8px; cursor: pointer;
+                          border: 1px solid var(--border); background: #fff; border-radius: 3px; }
+  .detail-header button:hover { background: #e9ecef; }
+  .detail-body { padding: 10px 12px; font-size: 12px; overflow-y: auto; max-height: calc(38vh - 32px); }
+  .detail-body .flow-desc { color: var(--muted); margin-bottom: 6px; }
+  .detail-actions { margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0f0f0; }
+  .detail-actions a { font-size: 11px; color: #1565c0; text-decoration: none; margin-right: 12px; cursor: pointer; }
+  .detail-actions a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Pipeline Parallel Set — Error Type Analysis</h1>
+  <label>Load experiment folder:</label>
+  <input type="file" id="folderInput" webkitdirectory>
+  <span id="loadStatus"></span>
+  <button id="flipBtn" style="display:none;font-size:12px;padding:3px 10px;cursor:pointer;
+    border:1px solid var(--border);background:#fff;border-radius:3px;margin-left:auto;"
+    onclick="toggleFlip()">&#8644; Flip Flow</button>
+</div>
+
+<div class="summary" id="summaryBar" style="display:none;"></div>
+
+<div class="legend" id="legendBar" style="display:none;">
+  <span style="font-weight:600;color:var(--text);">Outcome legend:</span>
+  <div class="legend-item"><span class="legend-swatch" style="background:#27ae60"></span> Correct</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#e67e22"></span> Ambiguous Input</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#9b59b6"></span> Data Quality</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#e74c3c"></span> AI Error</div>
+  <div class="legend-item"><span class="legend-swatch" style="background:#95a5a6"></span> No GT</div>
+</div>
+
+<div id="chart">
+  <div class="empty" id="placeholder">
+    <h2>No data loaded</h2>
+    <p>Select an experiment folder containing <code>records_summary_augmented.jsonl</code>.</p>
+    <p style="margin-top:4px;font-size:12px;">
+      This viewer expects the augmented summary with <code>error_type</code> field.<br>
+      Run <code>python experiments/error_analysis.py --experiment &lt;dir&gt;</code> first.
+    </p>
+    <p style="margin-top:4px;font-size:12px;">
+      If <code>record_traces.jsonl</code> is also present, clicking flows will link to Trace Viewer.
+    </p>
+  </div>
+</div>
+
+<div id="detailPanel">
+  <div class="detail-header">
+    <h3 id="detailTitle"></h3>
+    <button onclick="document.getElementById('detailPanel').style.display='none'">Close</button>
+  </div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Globals
+// ---------------------------------------------------------------------------
+let _linkMeta = [];
+let _nodeMeta = [];
+let _allRecords = [];
+let _errorAnalysis = null;  // var_id -> {error_type, reasoning}
+let _traceText = null;
+let _flipped = false;
+
+function toggleFlip() {
+  _flipped = !_flipped;
+  document.getElementById('flipBtn').textContent = _flipped ? '\u21C4 Flip Flow (reversed)' : '\u21C4 Flip Flow';
+  if (_allRecords.length > 0) buildChart(_allRecords);
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ---------------------------------------------------------------------------
+// Folder loading — scan for known files
+// ---------------------------------------------------------------------------
+
+// Auto-load default experiment data from data/ on first paint.
+async function loadFromDataDir() {
+  const status = document.getElementById('loadStatus');
+  const badges = [];
+
+  try {
+    const r = await fetch('data/error_analysis.json');
+    if (r.ok) {
+      const errorList = await r.json();
+      _errorAnalysis = {};
+      for (const e of errorList) _errorAnalysis[e.var_id] = e;
+    }
+  } catch (_) { _errorAnalysis = null; }
+
+  let records = null, summaryName = null;
+  for (const name of ['records_summary_augmented.jsonl', 'records_summary.jsonl']) {
+    try {
+      const r = await fetch('data/' + name);
+      if (r.ok) {
+        const text = await r.text();
+        records = text.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+        summaryName = name;
+        break;
+      }
+    } catch (_) {}
+  }
+  if (!records || records.length === 0) return false;
+
+  if (summaryName === 'records_summary.jsonl' && _errorAnalysis) {
+    for (const r of records) {
+      if (r.correct === false && _errorAnalysis[r.var_id]) {
+        r.error_type = _errorAnalysis[r.var_id].error_type;
+      }
+    }
+  }
+
+  _allRecords = records;
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('flipBtn').style.display = '';
+  buildSummary(records);
+  buildChart(records);
+  badges.push(`<span class="load-status load-ok">${summaryName}</span>`);
+  if (_errorAnalysis) badges.push('<span class="load-status load-ok">error_analysis.json</span>');
+
+  try {
+    const r = await fetch('data/record_traces.jsonl');
+    if (r.ok) {
+      _traceText = await r.text();
+      badges.push('<span class="load-status load-ok">record_traces.jsonl</span>');
+    }
+  } catch (_) {}
+
+  status.innerHTML = badges.join(' ');
+  return true;
+}
+loadFromDataDir();
+
+document.getElementById('folderInput').addEventListener('change', async (e) => {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+
+  let summaryFile = null;
+  let summaryFallback = null;
+  let traceFile = null;
+  let errorFile = null;
+
+  for (const f of files) {
+    const name = f.name;
+    if (name === 'records_summary_augmented.jsonl') summaryFile = f;
+    if (name === 'records_summary.jsonl')           summaryFallback = f;
+    if (name === 'record_traces.jsonl')              traceFile = f;
+    if (name === 'error_analysis.json')              errorFile = f;
+  }
+
+  // Load error analysis if available (for detail panel reasoning)
+  if (errorFile) {
+    try {
+      const errorText = await errorFile.text();
+      const errorList = JSON.parse(errorText);
+      _errorAnalysis = {};
+      for (const e of errorList) _errorAnalysis[e.var_id] = e;
+    } catch (_) { _errorAnalysis = null; }
+  }
+
+  // Prefer augmented summary; fall back to regular + error_analysis.json merge
+  const chosenFile = summaryFile || summaryFallback;
+
+  const status = document.getElementById('loadStatus');
+  const badges = [];
+
+  if (chosenFile) {
+    const text = await chosenFile.text();
+    let records = text.trim().split('\n').filter(Boolean).map(l => JSON.parse(l));
+
+    // If using non-augmented file but have error_analysis.json, merge error_type in
+    if (!summaryFile && _errorAnalysis) {
+      for (const r of records) {
+        if (r.correct === false && _errorAnalysis[r.var_id]) {
+          r.error_type = _errorAnalysis[r.var_id].error_type;
+        }
+      }
+    }
+
+    if (records.length > 0) {
+      _allRecords = records;
+      document.getElementById('placeholder').style.display = 'none';
+      document.getElementById('detailPanel').style.display = 'none';
+      document.getElementById('flipBtn').style.display = '';
+      buildSummary(records);
+      buildChart(records);
+      badges.push(`<span class="load-status load-ok">${chosenFile.name}</span>`);
+      if (errorFile) badges.push('<span class="load-status load-ok">error_analysis.json</span>');
+    }
+  } else {
+    badges.push('<span class="load-status load-miss">records_summary_augmented.jsonl not found</span>');
+  }
+
+  if (traceFile) {
+    _traceText = await traceFile.text();
+    badges.push('<span class="load-status load-ok">record_traces.jsonl</span>');
+  } else {
+    _traceText = null;
+    badges.push('<span class="load-status load-miss">record_traces.jsonl not found</span>');
+  }
+
+  status.innerHTML = badges.join(' ');
+});
+
+// ---------------------------------------------------------------------------
+// Stats bar
+// ---------------------------------------------------------------------------
+
+function buildSummary(records) {
+  const bar = document.getElementById('summaryBar');
+  bar.style.display = 'flex';
+
+  const total = records.length;
+  const labeled = records.filter(r => r.has_ground_truth || r.ground_truth_id != null).length;
+  const correct = records.filter(r => r.correct === true).length;
+  const incorrect = records.filter(r => r.correct === false).length;
+  const cpCorrect = records.filter(r => r.concept_path_correct === true).length;
+  const cpLabeled = records.filter(r => r.concept_path_correct != null).length;
+  const llmFailed = records.filter(r => r.llm_call_failed === true).length;
+
+  // Error type counts
+  const ambiguous = records.filter(r => r.error_type === 'ambiguous_input').length;
+  const dataQ = records.filter(r => r.error_type === 'data_quality').length;
+  const aiErr = records.filter(r => r.error_type === 'ai_error').length;
+
+  const accPct  = labeled > 0 ? (correct / labeled * 100).toFixed(1) + '%' : 'N/A';
+  const cpPct   = cpLabeled > 0
+    ? `${(cpCorrect / cpLabeled * 100).toFixed(1)}%`
+    : 'N/A';
+
+  bar.innerHTML = `
+    <div class="stat">Records: <b>${total}</b></div>
+    <div class="stat">Labeled: <b>${labeled}</b></div>
+    <div class="stat">Accuracy: <b style="color:#27ae60">${accPct}</b></div>
+    <div class="stat">Incorrect: <b style="color:#e74c3c">${incorrect}</b></div>
+    <div class="stat">Concept path: <b>${cpPct}</b></div>
+    <div class="stat" style="border-left:1px solid var(--border);padding-left:10px;">
+      Ambiguous: <b style="color:#e67e22">${ambiguous}</b></div>
+    <div class="stat">Data quality: <b style="color:#9b59b6">${dataQ}</b></div>
+    <div class="stat">AI error: <b style="color:#e74c3c">${aiErr}</b></div>
+    <div class="stat">LLM failures: <b style="color:${llmFailed > 0 ? '#c0392b' : 'inherit'}">${llmFailed}</b></div>
+  `;
+
+  document.getElementById('legendBar').style.display = 'flex';
+}
+
+// ---------------------------------------------------------------------------
+// Sankey chart
+// ---------------------------------------------------------------------------
+
+function buildChart(records) {
+  const n = records.length;
+
+  const classifiersBase = [
+    { name: 'Input',            fn: () => 'All Records' },
+    { name: 'Concept Path',     fn: r => {
+        if (r.concept_path_correct === true)  return 'Correct';
+        if (r.concept_path_correct === false) return 'Incorrect';
+        return 'Not Evaluated';
+    }},
+    { name: 'GT in Candidates', fn: r => {
+        if (r.gt_in_registry === false)       return 'Not in Registry';
+        if (r.gt_in_candidates === true)      return 'Retrieved';
+        if (r.gt_in_candidates === false)     return 'Missed';
+        return 'No GT';
+    }},
+    { name: 'Decision',         fn: r => {
+        if (r.llm_call_failed === true)           return 'LLM Error';
+        if (r.decision_correct === true && r.decision_type === 'match')    return 'Right Match';
+        if (r.decision_correct === true && r.decision_type === 'no_match') return 'Right Reject';
+        if (r.decision_correct === false && r.decision_type === 'match')    return 'Should Reject';
+        if (r.decision_correct === false && r.decision_type === 'no_match') return 'Should Match';
+        if (r.decision_type === 'no_match' && !(r.has_ground_truth || r.ground_truth_id != null)) return 'Reject (no GT)';
+        if (r.decision_type === 'match' && !(r.has_ground_truth || r.ground_truth_id != null))    return 'Match (no GT)';
+        return 'Unknown';
+    }},
+    { name: 'Outcome',          fn: r => {
+        if (r.correct === true)  return 'Correct';
+        if (r.correct === false) {
+          if (r.error_type === 'ambiguous_input') return 'Ambiguous Input';
+          if (r.error_type === 'data_quality')    return 'Data Quality';
+          if (r.error_type === 'ai_error')        return 'AI Error';
+          return 'Unclassified Error';
+        }
+        return 'No GT';
+    }},
+  ];
+
+  const classifiers = _flipped ? [...classifiersBase].reverse() : classifiersBase;
+
+  const nodeColorMap = {
+    'All Records':       '#4a90d9',
+    'Correct':           '#27ae60',  'Incorrect': '#e74c3c',  'Not Evaluated': '#95a5a6',
+    'Retrieved':         '#27ae60',  'Missed': '#e74c3c',
+    'Not in Registry':   '#8e44ad',  'No GT': '#95a5a6',
+    'Right Match':       '#27ae60',  'Right Reject': '#2980b9',
+    'Should Match':      '#c0392b',  'Should Reject': '#e67e22',
+    'LLM Error':         '#e67e22',  'Reject (no GT)': '#95a5a6', 'Match (no GT)': '#95a5a6',
+    // Error type nodes
+    'Ambiguous Input':   '#e67e22',
+    'Data Quality':      '#9b59b6',
+    'AI Error':          '#e74c3c',
+    'Unclassified Error':'#bdc3c7',
+  };
+
+  const linkColorMap = {
+    'All Records':       'rgba(74,144,217,0.35)',
+    'Correct':           'rgba(39,174,96,0.35)',  'Incorrect': 'rgba(231,76,60,0.35)',
+    'Not Evaluated':     'rgba(149,165,166,0.35)',
+    'Retrieved':         'rgba(39,174,96,0.35)',  'Missed': 'rgba(231,76,60,0.35)',
+    'Not in Registry':   'rgba(142,68,173,0.35)', 'No GT': 'rgba(149,165,166,0.35)',
+    'Right Match':       'rgba(39,174,96,0.35)',  'Right Reject': 'rgba(41,128,185,0.35)',
+    'Should Match':      'rgba(192,57,43,0.35)', 'Should Reject': 'rgba(230,126,34,0.35)',
+    'LLM Error':         'rgba(230,126,34,0.35)', 'Reject (no GT)': 'rgba(149,165,166,0.35)',
+    'Match (no GT)':     'rgba(149,165,166,0.35)',
+    // Error type links
+    'Ambiguous Input':   'rgba(230,126,34,0.35)',
+    'Data Quality':      'rgba(155,89,182,0.35)',
+    'AI Error':          'rgba(231,76,60,0.35)',
+    'Unclassified Error':'rgba(189,195,199,0.35)',
+  };
+
+  const classified = records.map(r => classifiers.map(c => c.fn(r)));
+
+  // Build nodes
+  const nodeLabels = [], nodeColors = [], stageNodes = [];
+  for (let si = 0; si < classifiers.length; si++) {
+    const seen = new Set(), cats = [];
+    for (const row of classified)
+      if (!seen.has(row[si])) { seen.add(row[si]); cats.push(row[si]); }
+    const counts = {};
+    for (const row of classified) counts[row[si]] = (counts[row[si]] || 0) + 1;
+
+    const map = {};
+    for (const cat of cats) {
+      map[cat] = nodeLabels.length;
+      nodeLabels.push(si === 0 ? `${cat} (${n})` : `${cat} (${counts[cat]})`);
+      nodeColors.push(nodeColorMap[cat] || '#555');
+    }
+    stageNodes.push(map);
+  }
+
+  // Build links with record tracking
+  const linkAgg = {};
+  for (let ri = 0; ri < n; ri++) {
+    for (let si = 0; si < classifiers.length - 1; si++) {
+      const src = stageNodes[si][classified[ri][si]];
+      const tgt = stageNodes[si + 1][classified[ri][si + 1]];
+      const tgtCat = classified[ri][si + 1];
+      const key = `${src}|${tgt}|${tgtCat}`;
+      if (!linkAgg[key]) linkAgg[key] = {
+        count: 0, ids: [],
+        srcLabel: nodeLabels[src], tgtLabel: nodeLabels[tgt],
+        stageName: classifiers[si + 1].name,
+      };
+      linkAgg[key].count++;
+      linkAgg[key].ids.push(records[ri].var_id);
+    }
+  }
+
+  // Build node meta
+  _nodeMeta = new Array(nodeLabels.length).fill(null);
+  for (let si = 0; si < classifiers.length; si++) {
+    for (const [cat, nodeIdx] of Object.entries(stageNodes[si])) {
+      const ids = [];
+      for (let ri = 0; ri < n; ri++)
+        if (classified[ri][si] === cat) ids.push(records[ri].var_id);
+      _nodeMeta[nodeIdx] = { label: nodeLabels[nodeIdx], stageName: classifiers[si].name, ids, isNode: true };
+    }
+  }
+
+  const linkSource = [], linkTarget = [], linkValue = [], linkColor = [], linkCustom = [];
+  _linkMeta = [];
+
+  for (const [key, info] of Object.entries(linkAgg)) {
+    const [src, tgt, tgtCat] = key.split('|');
+    linkSource.push(+src);
+    linkTarget.push(+tgt);
+    linkValue.push(info.count);
+    linkColor.push(linkColorMap[tgtCat] || 'rgba(149,165,166,0.35)');
+    const preview = info.ids.length <= 5
+      ? info.ids.join(', ')
+      : info.ids.slice(0, 5).join(', ') + `, ... +${info.ids.length - 5} more`;
+    linkCustom.push(preview);
+    _linkMeta.push({ srcLabel: info.srcLabel, tgtLabel: info.tgtLabel, stageName: info.stageName, ids: info.ids });
+  }
+
+  const trace = {
+    type: 'sankey', orientation: 'h', arrangement: 'perpendicular',
+    node: {
+      label: nodeLabels, color: nodeColors,
+      pad: 20, thickness: 18, line: { color: '#fff', width: 1 },
+    },
+    link: {
+      source: linkSource, target: linkTarget, value: linkValue, color: linkColor,
+      customdata: linkCustom,
+      hovertemplate:
+        '%{source.label} \u2192 %{target.label}<br>' +
+        '<b>%{value} records</b><br>%{customdata}' +
+        '<extra>Click for details</extra>',
+    },
+  };
+
+  const annotations = classifiers.map((c, i) => ({
+    x: i / (classifiers.length - 1), y: 1.06,
+    xref: 'paper', yref: 'paper',
+    text: `<b>${c.name}</b>`, showarrow: false,
+    font: { size: 12, color: '#333' },
+  }));
+
+  const layout = {
+    title: { text: 'Pipeline Error Analysis Funnel', font: { size: 15 }, y: 0.98 },
+    font: { size: 11 },
+    margin: { t: 60, b: 20, l: 60, r: 60 },
+    height: Math.max(350, window.innerHeight * 0.58 - 70),
+    annotations,
+  };
+
+  Plotly.newPlot('chart', [trace], layout, { responsive: true }).then(gd => {
+    gd.on('plotly_click', function(data) {
+      if (!data || !data.points || !data.points[0]) return;
+      const pt = data.points[0];
+      if (pt.source !== undefined && _linkMeta[pt.pointNumber])
+        showDetail(_linkMeta[pt.pointNumber]);
+    });
+    attachNodeClickListeners();
+  });
+}
+
+function attachNodeClickListeners() {
+  const chartDiv = document.getElementById('chart');
+  const labelToMeta = {};
+  for (const m of _nodeMeta) if (m) labelToMeta[m.label] = m;
+
+  const seen = new Set();
+  chartDiv.querySelectorAll('text').forEach(textEl => {
+    const meta = labelToMeta[textEl.textContent.trim()];
+    if (!meta) return;
+
+    const g = textEl.parentElement;
+    if (!g || seen.has(g)) return;
+    seen.add(g);
+
+    let startX, startY, dragging = false;
+    g.style.cursor = 'pointer';
+
+    g.addEventListener('mousedown', e => {
+      startX = e.clientX; startY = e.clientY; dragging = false;
+      e.stopPropagation();
+    }, true);
+
+    g.addEventListener('mousemove', e => {
+      if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4)
+        dragging = true;
+    }, true);
+
+    g.addEventListener('mouseup', e => {
+      if (!dragging) showDetail(meta);
+    }, true);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Detail panel (on click)
+// ---------------------------------------------------------------------------
+
+const errorTypeStyle = {
+  'ambiguous_input': { color: '#e67e22', label: 'Ambiguous Input' },
+  'data_quality':    { color: '#9b59b6', label: 'Data Quality' },
+  'ai_error':        { color: '#e74c3c', label: 'AI Error' },
+};
+
+function showDetail(meta) {
+  const panel = document.getElementById('detailPanel');
+  const title = document.getElementById('detailTitle');
+  const body  = document.getElementById('detailBody');
+
+  title.textContent = meta.isNode
+    ? `${meta.stageName}: ${meta.label} (${meta.ids.length})`
+    : `${meta.stageName}: ${meta.srcLabel} \u2192 ${meta.tgtLabel} (${meta.ids.length})`;
+
+  const recMap = {};
+  for (const r of _allRecords) recMap[r.var_id] = r;
+
+  let rows = '';
+  for (const id of meta.ids) {
+    const r = recMap[id];
+    if (!r) continue;
+    const matched = r.matched_rvar_id ? esc(r.matched_rvar_id) : '<span style="color:var(--muted)">none</span>';
+    const dec = r.decision_type || '?';
+
+    let corr;
+    if (r.correct === true) {
+      corr = '<span style="color:#27ae60">correct</span>';
+    } else if (r.correct === false) {
+      const et = r.error_type;
+      const style = errorTypeStyle[et];
+      if (style) {
+        corr = `<span style="color:${style.color}">${style.label}</span>`;
+      } else {
+        corr = '<span style="color:#e74c3c">incorrect</span>';
+      }
+    } else {
+      corr = '<span style="color:var(--muted)">no GT</span>';
+    }
+
+    // Show error reasoning from error_analysis.json if available
+    let reasoningHtml = '';
+    if (r.correct === false && _errorAnalysis && _errorAnalysis[id]) {
+      reasoningHtml = `<div style="font-size:10px;color:var(--muted);margin-top:1px;font-style:italic;">${esc(_errorAnalysis[id].reasoning)}</div>`;
+    }
+
+    rows += `<tr>
+      <td style="font-family:monospace;font-weight:600;padding:3px 6px">${esc(id)}</td>
+      <td style="padding:3px 6px">${esc(r.original_label || '')}</td>
+      <td style="padding:3px 6px">${dec}</td>
+      <td style="padding:3px 6px">${matched}</td>
+      <td style="padding:3px 6px">${corr}${reasoningHtml}</td>
+    </tr>`;
+  }
+
+  const hasTrace = !!_traceText;
+
+  body.innerHTML = `
+    <div class="flow-desc">${meta.isNode ? esc(meta.label) : `${esc(meta.srcLabel)} \u2192 ${esc(meta.tgtLabel)}`}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px;">
+      <thead>
+        <tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--muted);">
+          <th style="padding:3px 6px">var_id</th>
+          <th style="padding:3px 6px">label</th>
+          <th style="padding:3px 6px">decision</th>
+          <th style="padding:3px 6px">matched</th>
+          <th style="padding:3px 6px">outcome</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="detail-actions">
+      ${hasTrace
+        ? '<a id="openTraceBtn">Open in Trace Viewer \u2197</a>'
+        : '<span style="font-size:11px;color:var(--muted)">record_traces.jsonl not in folder — Trace Viewer linking unavailable</span>'}
+    </div>
+  `;
+
+  const btn = document.getElementById('openTraceBtn');
+  if (btn) {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const filter = encodeURIComponent(meta.ids.join(','));
+      window.open(`trace_viewer.html?filter=${filter}`, '_blank');
+    });
+  }
+
+  panel.style.display = 'block';
+}
+</script>
+</body>
+</html>

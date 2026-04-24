@@ -1,0 +1,217 @@
+[
+  {
+    "var_id": "GHR014601",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label is only 'If Other, please specify' within a broad transfusion-complication section; nothing indicates the specific complication of an acute haemolytic transfusion reaction, so a correct mapping cannot be determined from the given information alone."
+  },
+  {
+    "var_id": "GHR014218",
+    "error_type": "ambiguous_input",
+    "reasoning": "The label merely says \u201cIf \u2018Other reason\u2019, please specify\u201d without clarifying whether the \u2018other reason\u2019 pertains to starting, continuing, never starting, or stopping hydroxyurea, so a human cannot confidently pick between MEDHUREASON and MEDHUENDREASON without additional context."
+  },
+  {
+    "var_id": "GHR014222",
+    "error_type": "data_quality",
+    "reasoning": "Both registry variables capture reasons for discontinuing hydroxyurea; the ground-truth variable simply also covers 'never being on' the drug, so the system\u2019s choice is a defensible, near-equivalent match."
+  },
+  {
+    "var_id": "GHR014604",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label only says \"If 'Other', please specify\" under transfusion complications, without indicating which specific complication (e.g., acute haemolytic reaction) it refers to; a reviewer would need the surrounding option list to know that this free-text corresponds to that specific reaction."
+  },
+  {
+    "var_id": "GHR014715",
+    "error_type": "ambiguous_input",
+    "reasoning": "Content filter blocked classification; label likely too vague or context-dependent."
+  },
+  {
+    "var_id": "GHR014235",
+    "error_type": "data_quality",
+    "reasoning": "The field asks for any negative side effects observed, while the ground-truth registry variable is limited to reasons for stopping therapy. The system\u2019s \u2018no_match\u2019 is defensible because the registry variable does not truly cover all observed side effects, indicating a mismatch in specificity between the ground truth and the input."
+  },
+  {
+    "var_id": "GHR014245",
+    "error_type": "data_quality",
+    "reasoning": "The field asks whether HU was \u2018discussed\u2019; mapping it to \u2018counseling\u2019 is a reasonable, defensible interpretation, while the ground-truth chose \u2018offered\u2019. The two registry variables are semantically close, so the discrepancy stems from labeling choices rather than clear system misunderstanding."
+  },
+  {
+    "var_id": "GHR014611",
+    "error_type": "ambiguous_input",
+    "reasoning": "Content filter blocked classification; label likely too vague or context-dependent."
+  },
+  {
+    "var_id": "GHR013495",
+    "error_type": "ambiguous_input",
+    "reasoning": "Content filter blocked classification; label likely too vague or context-dependent."
+  },
+  {
+    "var_id": "GHR014614",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field just states whether a transfusion reaction occurred, without specifying reaction type or time frame; mapping it specifically to acute haemolytic reaction (ground truth) versus any reaction in 12 months (system) is not resolvable from the given information."
+  },
+  {
+    "var_id": "GHR014403",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label only presents a date validation message and never indicates whether it is a start or end date for hydroxyurea, so without extra context a human could not reliably choose between start vs. end; the mapping decision is inherently ambiguous."
+  },
+  {
+    "var_id": "GHR014408",
+    "error_type": "data_quality",
+    "reasoning": "Whether 'baseline period/year' equates to 'start of study' or to 'ever had therapy' is debatable; the system\u2019s choice (at start of study) is a reasonable, semantically close interpretation of the field wording."
+  },
+  {
+    "var_id": "GHR014411",
+    "error_type": "data_quality",
+    "reasoning": "Both the predicted variable and the ground-truth variable represent reasons for discontinuing Hydroxyurea; the ground truth also encompasses 'never being on' the drug, but the survey label only mentions stopping, making the system\u2019s choice defensible and the distinction largely a matter of specificity."
+  },
+  {
+    "var_id": "GHR014413",
+    "error_type": "data_quality",
+    "reasoning": "The form asks a yes/no question about an interruption, matching MEDHUEND, whereas the ground-truth points to the end-date variable; the system\u2019s choice is defensible, suggesting the ground-truth mapping is likely erroneous."
+  },
+  {
+    "var_id": "GHR014880",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label simply says \u201cOther, please specify\u201d under Surgery History, giving no clue whether it refers to lifetime history, current visit, or \u2018since last visit\u2019; both registry variables are plausible. A human would need more form context to choose between them."
+  },
+  {
+    "var_id": "GHR014889",
+    "error_type": "ai_error",
+    "reasoning": "Input clearly refers to other prior surgeries in history; system chose a follow-up visit 'other surgical procedures since last visit' variable instead of the general 'other surgery intervention' variable."
+  },
+  {
+    "var_id": "GHR014434",
+    "error_type": "data_quality",
+    "reasoning": "The source field asks about any adverse event, while the ground-truth variable is narrowly about acute haemolytic reactions; the system\u2019s broader adverse-event choice is defensible and the discrepancy stems from debatable specificity, not a comprehension failure."
+  },
+  {
+    "var_id": "GHR014621",
+    "error_type": "data_quality",
+    "reasoning": "The field explicitly asks for the number of PRBC units, and the system chose the registry variable that captures PRBC unit count; the ground-truth instead points to a volume-in-mL variable, so the disagreement stems from questionable ground-truth mapping rather than a clear AI mistake."
+  },
+  {
+    "var_id": "GHR014460",
+    "error_type": "data_quality",
+    "reasoning": "The form metadata explicitly references Hydroxyurea; selecting the Hydroxyurea-specific variable (MEDHU) is a defensible choice and arguably a better semantic match than the more generic THHX selected as ground truth, indicating a debatable ground truth assignment rather than a clear AI mistake."
+  },
+  {
+    "var_id": "GHR014630",
+    "error_type": "data_quality",
+    "reasoning": "The survey field asks for triggers of any transfusion, while the ground-truth variable refers specifically to chronic transfusion indications; the mapping is debatable, so the system\u2019s \u2018no match\u2019 decision is defensible."
+  },
+  {
+    "var_id": "GHR014482",
+    "error_type": "ambiguous_input",
+    "reasoning": "The phrase \u201cHas the participant started Hydroxyurea therapy?\u201d could mean the therapy was ever initiated, not necessarily that it is currently being taken, so the input lacks clarity to definitively favor \u2018current use\u2019 over \u2018ever had\u2019; both mappings are plausible."
+  },
+  {
+    "var_id": "GHR014928",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label '6a. Date(s)' in a generic surgery history section gives no indication it refers to a breathing-tube placement; without seeing the surrounding form a human could not reliably choose THBREATHDT, so the input itself is too vague for a confident mapping."
+  },
+  {
+    "var_id": "GHR014930",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label merely states 'If Yes, date performed' under a broad respiratory\u2010surgery section and does not specify the exact procedure (e.g., adenoidectomy); without additional context a mapper cannot know which specific surgery the date refers to, so the correct registry variable is indeterminable from the given information."
+  },
+  {
+    "var_id": "GHR014934",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label \u201c8b. Specify type:\u201d with only a generic pain-medication category does not indicate that it refers specifically to abortive/rescue drugs; a human would also need more survey context (e.g., the preceding question) to infer that nuance."
+  },
+  {
+    "var_id": "GHR014941",
+    "error_type": "ai_error",
+    "reasoning": "The field clearly asks about any surgical procedures (not specifically 'other' procedures), so the correct variable is SPTHSURHX; the system mis-selected the 'other' variant despite sufficient information."
+  },
+  {
+    "var_id": "GHR014948",
+    "error_type": "ai_error",
+    "reasoning": "The field label clearly asks whether any surgical procedures occurred since last visit and matches the generic registry variable about having a surgical procedure; the system should have mapped it but failed, indicating a reasoning mistake rather than ambiguous input or data issues."
+  },
+  {
+    "var_id": "GHR014959",
+    "error_type": "data_quality",
+    "reasoning": "The field captures unspecified respiratory surgical history details; mapping it to a broad variable 'Has the participant had a surgical procedure?' is debatable and the system\u2019s decision that no suitable registry variable exists is a defensible choice reflecting a specificity mismatch."
+  },
+  {
+    "var_id": "GHR014643",
+    "error_type": "data_quality",
+    "reasoning": "The two registry variables differ only slightly in wording (chronic blood transfusion vs chronic transfusion) and appear to represent virtually the same concept, so the system\u2019s choice is defensible and the distinction in ground truth is debatable."
+  },
+  {
+    "var_id": "GHR014646",
+    "error_type": "ai_error",
+    "reasoning": "The field explicitly asks about CTXN (chronic transfusion) therapy, which aligns with the chronic transfusion registry variable, not simple transfusion; the system ignored this key distinction."
+  },
+  {
+    "var_id": "GHR014520",
+    "error_type": "ai_error",
+    "reasoning": "Field clearly asks whether participant is currently on hydroxyurea therapy, matching MEDHU; the system ignored this and chose a laboratory-monitoring variable instead."
+  },
+  {
+    "var_id": "GHR014521",
+    "error_type": "ai_error",
+    "reasoning": "The field clearly asks if the participant is on hydroxyurea therapy at freeze\u2014matching MEDHU\u2014yet the system returned no_match, indicating it missed an obvious, well-described mapping."
+  },
+  {
+    "var_id": "GHR014546",
+    "error_type": "data_quality",
+    "reasoning": "The registry variable chosen as ground-truth (\u201creasons to stop hydroxyurea\u201d) is only tangentially related to the field, which asks about any side effects, not specifically motives for discontinuation, so the correct mapping is debatable; the system\u2019s \u2018no_match\u2019 choice is defensible given the available candidates."
+  },
+  {
+    "var_id": "GHR014549",
+    "error_type": "data_quality",
+    "reasoning": "The AI chose the variable that literally matches the question ('days taken in past week'); the provided ground-truth maps to a broader \u2018consistency\u2019 variable, so the labeling appears incorrect rather than the AI\u2019s reasoning."
+  },
+  {
+    "var_id": "GHR014551",
+    "error_type": "ai_error",
+    "reasoning": "The field clearly captures an 'Other reason' text for hydroxyurea use; a registry variable named MEDHUOTHER ('other reasons/difficulties to take hydroxyurea') directly matches, so the system should have mapped to it instead of returning no_match."
+  },
+  {
+    "var_id": "GHR014552",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label is simply \u201cIf 'Other', specify\u201d with no explicit link to what \u2018Other\u2019 refers to; without the original survey question a human cannot confidently infer it maps to difficulties taking hydroxyurea rather than some other \u2018other\u2019 option, so the required mapping is not recoverable from the provided metadata alone."
+  },
+  {
+    "var_id": "GHR014165",
+    "error_type": "data_quality",
+    "reasoning": "The field asks about any COVID vaccination, whereas the ground-truth variable refers specifically to booster shots; choosing a general vaccination history variable is a defensible alternative, so the disagreement reflects debatable specificity rather than a clear AI mistake."
+  },
+  {
+    "var_id": "GHR014980",
+    "error_type": "ai_error",
+    "reasoning": "The field label explicitly states 'Reason is Unknown,' matching the specific registry variable for unknown surgical reason; the system ignored this clear cue and chose a generic surgery-history variable instead."
+  },
+  {
+    "var_id": "GHR014982",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label is only \u201cSpecify abnormal\u201d within a generic Surgery History section, giving no hint it refers specifically to abnormal brain MI results; mapping it to that precise registry variable requires context not provided in the metadata, so a human would also struggle without extra information."
+  },
+  {
+    "var_id": "GHR014985",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label 'Specify abnormal' within a generic Surgery History section provides no indication it pertains specifically to brain MRI results, so a human would not reliably choose SPTHSURRES without additional context."
+  },
+  {
+    "var_id": "GHR014182",
+    "error_type": "data_quality",
+    "reasoning": "The field explicitly asks for the name of the opioid medication, which aligns with MEDPAINOPUSE (\u201cName of opioids in use\u201d). The ground-truth variable (MEDPAINOP, apparently about chronic opioid therapy) does not capture the requested \u2018name\u2019. Thus the system\u2019s answer is defensible and the discrepancy arises from questionable ground-truth specificity, not from lack of information or system reasoning failure."
+  },
+  {
+    "var_id": "GHR014195",
+    "error_type": "ai_error",
+    "reasoning": "The field clearly refers to pneumococcal vaccination status and there is an exact registry variable for this, yet the system failed to map it, indicating a straightforward AI mistake."
+  },
+  {
+    "var_id": "GHR014653",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field just states 'Blood transfusion' with no indication of timing (ever vs current) or type (simple vs chronic), so a human could not confidently choose between the two candidate registry variables without extra context."
+  },
+  {
+    "var_id": "GHR015019",
+    "error_type": "ambiguous_input",
+    "reasoning": "The field label 'Why were they removed?' without the actual answer options gives no clear indication that it specifically refers to tonsillectomy; a human would need additional context from the form to connect it to that registry variable."
+  }
+]
